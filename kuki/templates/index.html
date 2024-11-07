@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Kuki</title>
+    <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+    <style>
+      body {
+        font-family: "Arial", sans-serif;
+        text-align: center;
+        margin: 0;
+        padding: 0;
+        background-color: #2a2a2a;
+        color: #e0e0e0;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+      }
+      .container {
+        padding: 20px;
+        max-width: 400px;
+        width: 100%;
+      }
+      h1 {
+        font-size: 24px;
+        margin-bottom: 20px;
+        color: #e0e0e0;
+      }
+      button {
+        margin: 10px 0;
+        padding: 10px 20px;
+        font-size: 16px;
+        border: none;
+        border-radius: 5px;
+        color: #fff;
+        cursor: pointer;
+      }
+      .button-group {
+        display: flex;
+        flex-direction: row;
+        justify-content: center;
+        align-items: center;
+        gap: 2rem;
+      }
+      #startRecording {
+        background-color: #4a90e2;
+      }
+      #stopRecording {
+        background-color: #f54949;
+      }
+      button:hover {
+        opacity: 0.9;
+      }
+      #startRecording:disabled {
+        background-color: #444;
+        cursor: not-allowed;
+      }
+      #timer {
+        font-size: 1.5rem;
+        color: #4a90e2;
+      }
+      audio {
+        width: 100%;
+        border: none;
+        border-radius: 5px;
+        background-color: #3a3a3a;
+        color: #e0e0e0;
+      }
+      audio::-webkit-media-controls-panel {
+        background-color: #3a3a3a;
+      }
+      audio::-webkit-media-controls-play-button {
+        color: #e0e0e0;
+      }
+      audio::-webkit-media-controls-time-remaining-display,
+      audio::-webkit-media-controls-time-display {
+        color: #e0e0e0;
+      }
+      .transcript-container {
+        margin: 1rem 0rem;
+        max-height: 50vh;
+        overflow: auto;
+      }
+      #spinner {
+        display: none;
+      }
+      .instruction {
+        font-size: 0.75rem;
+      }
+      #transcript {
+        cursor: pointer;
+      }
+      #transcript:hover {
+        opacity: 0.7;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="button-group">
+        <button id="startRecording">Start Recording</button>
+        <button id="stopRecording">Stop Recording</button>
+        <div id="timer">00:00</div>
+      </div>
+      <audio id="audioPlayer" controls></audio>
+      <p class="instruction">Click the text below to copy</p>
+      <div class="transcript-container">
+        <p id="spinner">Transcribing...</p>
+        <p id="transcript" onclick="copyText(this)">
+          <span>(Waiting for your voice)</span>
+        </p>
+      </div>
+    </div>
+
+    <script>
+      let mediaRecorder;
+      let audioChunks = [];
+      let audioBlob;
+      let startTime;
+      let recordingDuration = 0;
+      let isRecording = false;
+      let timerInterval;
+
+      const startRecordingButton = document.getElementById("startRecording");
+      const stopRecordingButton = document.getElementById("stopRecording");
+      stopRecordingButton.style.display = "none";
+      const audioPlayer = document.getElementById("audioPlayer");
+      const timer = document.getElementById("timer");
+
+      startRecordingButton.addEventListener("click", startRecording);
+      stopRecordingButton.addEventListener("click", stopRecording);
+
+      async function startRecording() {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: true,
+        });
+        mediaRecorder = new MediaRecorder(stream);
+
+        mediaRecorder.addEventListener("dataavailable", (event) => {
+          audioChunks.push(event.data);
+        });
+
+        mediaRecorder.addEventListener("start", () => {
+          timer.textContent = "00:00";
+
+          startTime = Date.now();
+          recordingDuration = 0;
+          isRecording = true;
+          startTimer();
+        });
+
+        mediaRecorder.addEventListener("stop", () => {
+          audioBlob = new Blob(audioChunks, { type: "audio/wav" });
+          audioChunks = [];
+          const audioUrl = URL.createObjectURL(audioBlob);
+          audioPlayer.src = audioUrl;
+          stopTimer();
+
+          const spinner = document.getElementById("spinner");
+          spinner.style.display = "block";
+          startRecordingButton.disabled = true;
+
+          sendAudioToTranscribe(audioBlob);
+        });
+
+        mediaRecorder.start();
+        startRecordingButton.style.display = "none";
+        stopRecordingButton.style.display = "block";
+      }
+
+      function stopRecording() {
+        mediaRecorder.stop();
+        startRecordingButton.style.display = "block";
+        stopRecordingButton.style.display = "none";
+      }
+
+      function startTimer() {
+        timerInterval = setInterval(() => {
+          if (isRecording) {
+            recordingDuration = Date.now() - startTime;
+            const minutes = Math.floor(recordingDuration / 60000);
+            const seconds = ((recordingDuration % 60000) / 1000).toFixed(0);
+            timer.textContent =
+              (minutes < 10 ? "0" : "") +
+              minutes +
+              ":" +
+              (seconds < 10 ? "0" : "") +
+              seconds;
+          }
+        }, 1000);
+      }
+
+      function stopTimer() {
+        clearInterval(timerInterval);
+      }
+
+      function sendAudioToTranscribe(audioBlob) {
+        let transcript = document.getElementById("transcript");
+        transcript.innerHTML = "";
+
+        const formData = new FormData();
+        formData.append("audio", audioBlob, "audio.wav");
+
+        fetch("/transcribe", {
+          method: "POST",
+          body: formData,
+        })
+          .then((response) => response.text())
+          .then((data) => {
+            transcript.innerHTML = data;
+            htmx.process(transcript);
+          })
+          .catch((error) => {
+            console.error("Error sending audio to /transcribe:", error);
+          })
+          .finally(() => {
+            const spinner = document.getElementById("spinner");
+            spinner.style.display = "none";
+            startRecordingButton.disabled = false;
+          });
+      }
+
+      function copyText(element) {
+        const span = element.querySelector("span");
+
+        const textarea = document.createElement("textarea");
+        textarea.value = span.textContent;
+        document.body.appendChild(textarea);
+
+        textarea.select();
+
+        try {
+          document.execCommand("copy");
+          alert("Text copied to clipboard!");
+        } catch (err) {
+          alert("Unable to copy text. Please try again.");
+        }
+
+        document.body.removeChild(textarea);
+      }
+    </script>
+  </body>
+</html>

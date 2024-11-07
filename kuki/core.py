@@ -9,3 +9,12 @@ if not models_dir.exists():
 stt_model = WhisperModel(
     "small.en", device="cpu", compute_type="int8", download_root=models_dir
 )
+
+
+def transcribe(audio_blob):
+    transcript = ""
+    segments, _ = stt_model.transcribe(audio_blob)
+    for s in segments:
+        transcript = f"{transcript} {s.text}"
+
+    return transcript
