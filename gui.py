@@ -10,6 +10,6 @@ is_dev = dev_var in ["1", "True", "true"]
 
 if __name__ == "__main__":
     webview.create_window(
-        "Kuki | Simple Speech-to-Text App", app, height=600, width=400
+        "Kuki | Simple Speech-to-Text App", app, height=460, width=360, http_port=8118
     )
     webview.start(debug=is_dev)
