@@ -7,5 +7,5 @@ if not models_dir.exists():
     models_dir.mkdir(parents=True)
 
 stt_model = WhisperModel(
-    "tiny.en", device="cpu", compute_type="int8", download_root=models_dir
+    "small.en", device="cpu", compute_type="int8", download_root=models_dir
 )
