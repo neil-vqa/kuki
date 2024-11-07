@@ -15,6 +15,6 @@ def transcribe(audio_blob):
     transcript = ""
     segments, _ = stt_model.transcribe(audio_blob)
     for s in segments:
-        transcript = f"{transcript} {s.text}"
+        transcript = f"{transcript}{s.text}"
 
     return transcript
