@@ -1,0 +1,2 @@
+build (windows):
+pyinstaller --name=kuki --noconsole --add-data "./kuki;kuki" --add-data "./models;models" --add-data "./st_ui.py;st_ui.py" gui.py
